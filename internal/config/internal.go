@@ -11,11 +11,12 @@ type Config struct {
 	CurrentUserName string `json:"current_user_name"`
 }
 
-func (c Config) SetUser(name string) {
+func (c Config) SetUser(name string) error {
 	c.CurrentUserName = name
 	if err := write(c); err != nil {
-		fmt.Errorf("Cannot save user")
+		return fmt.Errorf("cannot save user")
 	}
+	return nil
 }
 
 const configFile = ".gatorconfig.json"
