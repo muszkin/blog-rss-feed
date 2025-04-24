@@ -49,6 +49,8 @@ func main() {
 	cmds.handlers = make(map[string]func(*state, command) error)
 	cmds.register("login", handlerLogin)
 	cmds.register("register", handlerRegister)
+	cmds.register("reset", handleReset)
+	cmds.register("users", handleUsers)
 	args := os.Args
 	if len(args) < 2 {
 		fmt.Printf("too few arguments\n")
@@ -100,5 +102,28 @@ func handlerRegister(s *state, cmd command) error {
 		return err
 	}
 	fmt.Printf("User %v registered", user.Name)
+	return nil
+}
+
+func handleReset(s *state, _ command) error {
+	if err := s.db.Truncate(context.Background()); err != nil {
+		return err
+	}
+	fmt.Println("Table users has been reset")
+	return nil
+}
+
+func handleUsers(s *state, _ command) error {
+	users, err := s.db.GetUsers(context.Background())
+	if err != nil {
+		return err
+	}
+	for _, user := range users {
+		fmt.Printf(" * %s", user.Name)
+		if user.Name == s.config.CurrentUserName {
+			fmt.Printf(" (current)")
+		}
+		fmt.Printf("\n")
+	}
 	return nil
 }
