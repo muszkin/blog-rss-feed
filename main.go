@@ -8,6 +8,7 @@ import (
 	_ "github.com/lib/pq"
 	"github.com/muszkin/blog-rss-feed/internal/config"
 	"github.com/muszkin/blog-rss-feed/internal/database"
+	rss_feed "github.com/muszkin/blog-rss-feed/internal/rss-feed"
 	"os"
 	"time"
 )
@@ -51,6 +52,7 @@ func main() {
 	cmds.register("register", handlerRegister)
 	cmds.register("reset", handleReset)
 	cmds.register("users", handleUsers)
+	cmds.register("agg", handleAgg)
 	args := os.Args
 	if len(args) < 2 {
 		fmt.Printf("too few arguments\n")
@@ -125,5 +127,14 @@ func handleUsers(s *state, _ command) error {
 		}
 		fmt.Printf("\n")
 	}
+	return nil
+}
+
+func handleAgg(s *state, _ command) error {
+	rssFeedData, err := rss_feed.FetchFeed(context.Background(), "https://www.wagslane.dev/index.xml")
+	if err != nil {
+		return fmt.Errorf("something goes wrong: %v", err)
+	}
+	fmt.Println(rssFeedData)
 	return nil
 }
