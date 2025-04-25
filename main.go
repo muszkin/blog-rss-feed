@@ -53,6 +53,7 @@ func main() {
 	cmds.register("reset", handleReset)
 	cmds.register("users", handleUsers)
 	cmds.register("agg", handleAgg)
+	cmds.register("addfeed", handleAddFeed)
 	args := os.Args
 	if len(args) < 2 {
 		fmt.Printf("too few arguments\n")
@@ -136,5 +137,30 @@ func handleAgg(s *state, _ command) error {
 		return fmt.Errorf("something goes wrong: %v", err)
 	}
 	fmt.Println(rssFeedData)
+	return nil
+}
+
+func handleAddFeed(s *state, cmd command) error {
+	if len(cmd.arguments) < 2 {
+		return fmt.Errorf("you need to provide name and url for feed")
+	}
+	userName := s.config.CurrentUserName
+	user, err := s.db.GetUser(context.Background(), userName)
+	if err != nil {
+		return err
+	}
+	feed := database.CreateFeedParams{
+		ID:        uuid.New(),
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
+		Name:      cmd.arguments[0],
+		Url:       cmd.arguments[1],
+		UserID:    user.ID,
+	}
+	feedRecord, err := s.db.CreateFeed(context.Background(), feed)
+	if err != nil {
+		return err
+	}
+	fmt.Println(feedRecord)
 	return nil
 }
