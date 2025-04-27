@@ -11,6 +11,9 @@ RETURNING *;
 SELECT * FROM users WHERE name = $1;
 -- name: GetUsers :many
 SELECT * FROM users;
+-- name: GetUsersWithFeeds :many
+    select * from users
+        inner join feeds on users.id = feeds.user_id;
 
 -- name: Truncate :exec
 DELETE FROM users;

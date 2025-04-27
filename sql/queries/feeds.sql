@@ -1,12 +1,11 @@
 -- name: CreateFeed :one
-INSERT INTO feeds (id, created_at, updated_at, name, url, user_id)
+INSERT INTO feeds (id, created_at, updated_at, name, url)
 VALUES (
            $1,
            $2,
            $3,
            $4,
-            $5,
-        $6
+            $5
        )
 RETURNING *;
 -- name: GetFeedByName :one
@@ -17,7 +16,3 @@ SELECT * FROM feeds WHERE id = $1;
 SELECT * FROM feeds WHERE url = $1;
 -- name: GetFeeds :many
 SELECT * FROM feeds;
--- name: GetUserFeeds :many
-SELECT * FROM feeds WHERE user_id = $1;
--- name: TruncateFeeds :exec
-TRUNCATE TABLE feeds;
