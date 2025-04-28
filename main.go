@@ -10,6 +10,7 @@ import (
 	"github.com/muszkin/blog-rss-feed/internal/database"
 	rss_feed "github.com/muszkin/blog-rss-feed/internal/rss-feed"
 	"os"
+	"strconv"
 	"time"
 )
 
@@ -57,6 +58,8 @@ func main() {
 	cmds.register("feeds", handleFeeds)
 	cmds.register("follow", middlewareLoggedIn(handleFollow))
 	cmds.register("following", middlewareLoggedIn(handleFollowing))
+	cmds.register("unfollow", middlewareLoggedIn(handleUnfollow))
+	cmds.register("browse", middlewareLoggedIn(handleBrowse))
 	args := os.Args
 	if len(args) < 2 {
 		fmt.Printf("too few arguments\n")
@@ -134,13 +137,19 @@ func handleUsers(s *state, _ command) error {
 	return nil
 }
 
-func handleAgg(_ *state, _ command) error {
-	rssFeedData, err := rss_feed.FetchFeed(context.Background(), "https://www.wagslane.dev/index.xml")
-	if err != nil {
-		return fmt.Errorf("something goes wrong: %v", err)
+func handleAgg(s *state, cmd command) error {
+	if len(cmd.arguments) == 0 {
+		return fmt.Errorf("you need to provide duration in form of eg. 5s, 1m, 1h")
 	}
-	fmt.Println(rssFeedData)
-	return nil
+	duration, err := time.ParseDuration(cmd.arguments[0])
+	if err != nil {
+		return err
+	}
+	fmt.Printf("Collecting feeds every %v\n", cmd.arguments[0])
+	ticker := time.NewTicker(duration)
+	for ; ; <-ticker.C {
+		scrapeFeeds(s)
+	}
 }
 
 func handleAddFeed(s *state, cmd command, user database.User) error {
@@ -225,6 +234,78 @@ func handleFollowing(s *state, _ command, user database.User) error {
 		fmt.Printf("Feed '%s'\n", feedFollow.Name)
 	}
 	return nil
+}
+
+func handleUnfollow(s *state, cmd command, user database.User) error {
+	if len(cmd.arguments) == 0 {
+		return fmt.Errorf("you should provide feed url to unfollow")
+	}
+	feedUrl := cmd.arguments[0]
+	feed, err := s.db.GetFeedByUrl(context.Background(), feedUrl)
+	if err != nil {
+		return err
+	}
+	err = s.db.DeleteFeedFollow(context.Background(), database.DeleteFeedFollowParams{
+		FeedID: feed.ID,
+		UserID: user.ID,
+	})
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func handleBrowse(s *state, cmd command, user database.User) error {
+	var limit int
+	if len(cmd.arguments) == 0 {
+		limit = 2
+	} else {
+		limit, _ = strconv.Atoi(cmd.arguments[0])
+	}
+	posts, err := s.db.GetPostsForUser(context.Background(), database.GetPostsForUserParams{
+		ID:    user.ID,
+		Limit: int32(limit),
+	})
+	if err != nil {
+		return err
+	}
+	for _, post := range posts {
+		fmt.Println(post.Title)
+	}
+	return nil
+}
+
+func scrapeFeeds(s *state) {
+	nextFeed, err := s.db.GetNextFeedToFetch(context.Background())
+	if err != nil {
+		fmt.Printf("can't get next feed to check: %v\n", err)
+	}
+	err = s.db.MarkFeedFetched(context.Background(), nextFeed.ID)
+	if err != nil {
+		fmt.Printf("can't set feed as fetched: %v\n", err)
+	}
+	rssFeedData, err := rss_feed.FetchFeed(context.Background(), nextFeed.Url)
+	if err != nil {
+		fmt.Printf("can't download feed: %v\n", err)
+	}
+	fmt.Printf("Feed downloaded: %v\n", rssFeedData.Channel.Title)
+	for _, rssItem := range rssFeedData.Channel.Item {
+		publishedAt, _ := time.Parse("Y-m-d H:i:s", rssItem.PubDate)
+		createPostParams := database.CreatePostParams{
+			ID:          uuid.New(),
+			CreatedAt:   time.Now(),
+			UpdatedAt:   time.Now(),
+			Title:       rssItem.Title,
+			Url:         rssItem.Link,
+			Description: sql.NullString{String: rssItem.Description},
+			PublishedAt: publishedAt,
+			FeedID:      nextFeed.ID,
+		}
+		_, err := s.db.CreatePost(context.Background(), createPostParams)
+		if err != nil {
+			fmt.Printf("something goes wrong when saving post: %v\n", err)
+		}
+	}
 }
 
 func middlewareLoggedIn(handler func(s *state, cmd command, user database.User) error) func(*state, command) error {

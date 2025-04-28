@@ -16,3 +16,9 @@ SELECT * FROM feeds WHERE id = $1;
 SELECT * FROM feeds WHERE url = $1;
 -- name: GetFeeds :many
 SELECT * FROM feeds;
+-- name: MarkFeedFetched :exec
+update feeds
+set last_fetched_at = now() and updated_at = now()
+where id = $1;
+-- name: GetNextFeedToFetch :one
+select * from feeds order by last_fetched_at nulls first limit 1;
